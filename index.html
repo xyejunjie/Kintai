@@ -168,9 +168,21 @@ function renderStaff(){
   state.employees.forEach(e=>{
     const row=document.createElement("div");row.className="row top";
     const left=document.createElement("span");left.innerHTML=`${escapeHtml(e.name)} <span class="small">${e.active?"在职":"停用"}</span>`;
+    const actions=document.createElement("div");actions.style.display="flex";actions.style.gap="8px";
     const btn=document.createElement("button");btn.textContent=e.active?"停用":"恢复";
     btn.addEventListener("click",()=>{e.active=!e.active;save();renderAll();});
-    row.append(left,btn);box.appendChild(row);
+    const del=document.createElement("button");del.textContent="删除";
+    del.addEventListener("click",()=>{
+      const count=state.sessions.filter(s=>s.employeeId===e.id).length;
+      const msg=count
+        ? `确定删除「${e.name}」吗？\n该员工有 ${count} 条勤務记录，删除后这些打卡记录也会一并删除。此操作无法撤销。`
+        : `确定删除「${e.name}」吗？\n此操作无法撤销。`;
+      if(!confirm(msg)) return;
+      state.sessions=state.sessions.filter(s=>s.employeeId!==e.id);
+      state.employees=state.employees.filter(x=>x.id!==e.id);
+      save();renderAll();
+    });
+    actions.append(btn,del);row.append(left,actions);box.appendChild(row);
   });
 }
 function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
