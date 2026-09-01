@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon.svg">
+<title>焼肉店 勤怠管理</title>
+<style>
+:root{--bg:#f5f5f7;--card:#fff;--text:#171717;--muted:#6b7280;--line:#e5e7eb;--accent:#111827}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Hiragino Sans","Noto Sans JP",sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:980px;margin:auto;padding:16px}.top{display:flex;justify-content:space-between;gap:12px;align-items:end;flex-wrap:wrap}
+h1{font-size:25px;margin:0}.clock{font-size:26px;font-weight:700}.date,.small{color:var(--muted);font-size:14px}
+.tabs{display:flex;gap:8px;margin:16px 0;flex-wrap:wrap}.tab,button{border:1px solid var(--line);background:#fff;border-radius:14px;min-height:48px;padding:10px 16px;font-size:16px}
+.tab.active,.primary{background:var(--accent);color:#fff}.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.big{min-height:72px;font-size:20px;font-weight:700}.field{width:100%;min-height:50px;border:1px solid var(--line);border-radius:13px;padding:10px 12px;font-size:17px;background:#fff}
+.status{background:#f3f4f6;border-radius:14px;padding:13px;margin-top:14px}.stat{background:#f8fafc;border-radius:14px;padding:14px}.stat b{display:block;font-size:22px;margin-top:6px}
+.hidden{display:none!important}.row{padding:12px 0;border-top:1px solid var(--line)}.row:first-child{border-top:0}
+table{width:100%;border-collapse:collapse;min-width:680px}th,td{text-align:left;padding:11px;border-bottom:1px solid var(--line);font-size:14px}.scroll{overflow-x:auto}
+.pill{background:#f3f4f6;border-radius:999px;padding:7px 11px;font-size:14px}.danger{color:#991b1b}
+.edit-time-btn{min-height:36px;padding:6px 10px;font-size:14px;border-radius:10px}
+.edit-modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:16px;z-index:999}
+.edit-box{width:min(460px,100%);background:#fff;border-radius:20px;padding:18px}
+.edit-line{display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center;margin-top:12px}
+.edit-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+@media(max-width:700px){.grid4{grid-template-columns:1fr 1fr}.wrap{padding:12px}.card{padding:14px}.big{min-height:66px}.clock{font-size:23px}.edit-line{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div><h1>福嘟嘟 勤怠管理</h1><div id="date" class="date"></div></div>
+    <div id="clock" class="clock"></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="clockPane">打卡</button>
+    <button class="tab" data-tab="monthPane">月统计</button>
+    <button class="tab" data-tab="staffPane">员工管理</button>
+    <button class="tab" data-tab="backupPane">备份</button>
+  </div>
+
+  <section id="clockPane">
+    <div class="card">
+      <label class="small">员工</label>
+      <select id="employee" class="field"></select>
+      <div class="grid2" style="margin-top:14px">
+        <button class="big primary" data-action="in">出勤</button>
+        <button class="big" data-action="out">退勤</button>
+        <button class="big" data-action="break_start">休憩開始</button>
+        <button class="big" data-action="break_end">休憩終了</button>
+      </div>
+      <div id="status" class="status">请选择员工。</div>
+    </div>
+
+    <div class="card">
+      <div class="top"><b>今日记录</b><span id="todayTotal" class="pill">0小时00分</span></div>
+      <div id="todayRows"></div>
+    </div>
+  </section>
+
+  <section id="monthPane" class="hidden">
+    <div class="card">
+      <div class="grid2">
+        <div><label class="small">员工</label><select id="monthEmployee" class="field"></select></div>
+        <div><label class="small">月份</label><input id="monthInput" type="month" class="field"></div>
+      </div>
+      <div class="grid4" style="margin-top:14px">
+        <div class="stat"><span class="small">出勤天数</span><b id="days">0天</b></div>
+        <div class="stat"><span class="small">总工作</span><b id="totalWork">0小时00分</b></div>
+        <div class="stat"><span class="small">总休息</span><b id="totalBreak">0小时00分</b></div>
+        <div class="stat"><span class="small">日均工作</span><b id="avgWork">0小时00分</b></div>
+      </div>
+      <div class="scroll" style="margin-top:14px">
+        <table><thead><tr><th>日期</th><th>出勤</th><th>休息</th><th>退勤</th><th>实际工时</th><th>操作</th></tr></thead><tbody id="monthRows"></tbody></table>
+      </div>
+      <button id="exportCsv" style="margin-top:14px;width:100%">导出本月 CSV（Excel可打开）</button>
+    </div>
+  </section>
+
+  <section id="staffPane" class="hidden">
+    <div class="card">
+      <b>员工管理</b>
+      <div class="grid2" style="margin-top:12px">
+        <input id="newName" class="field" placeholder="输入员工姓名">
+        <button id="addEmployee" class="primary">新增员工</button>
+      </div>
+      <div id="employeeList" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <section id="backupPane" class="hidden">
+    <div class="card">
+      <b>数据备份</b>
+      <p class="small">建议每月底备份一次。备份文件包含员工名单和全部打卡记录。</p>
+      <button id="backupBtn" style="width:100%">导出备份文件</button>
+      <label class="small" style="display:block;margin-top:16px">恢复备份</label>
+      <input id="restoreFile" type="file" accept="application/json,.json" class="field">
+      <button id="restoreBtn" class="primary" style="width:100%;margin-top:10px">恢复数据</button>
+      <p class="small">恢复会覆盖当前数据，请先备份。</p>
+    </div>
+  </section>
+</div>
+
+<div id="editTimeModal" class="edit-modal hidden">
+  <div class="edit-box">
+    <b>修改时间</b>
+    <div id="editTimeInfo" class="small" style="margin-top:6px"></div>
+    <div class="edit-line"><label class="small">出勤</label><input id="editClockIn" type="datetime-local" class="field"></div>
+    <div id="editBreaks"></div>
+    <div class="edit-line"><label class="small">退勤</label><input id="editClockOut" type="datetime-local" class="field"></div>
+    <div class="edit-actions">
+      <button id="cancelEditTime">取消</button>
+      <button id="saveEditTime" class="primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const KEY="kintai_ipad_v1";
+const $=s=>document.querySelector(s);
+const pad=n=>String(n).padStart(2,"0");
+const nowIso=()=>new Date().toISOString();
+const localDateKey=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const localYM=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}`;
+const timeOf=s=>s?new Date(s).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit",hour12:false}):"--:--";
+const minsBetween=(a,b)=>Math.max(0,Math.round((new Date(b)-new Date(a))/60000));
+const fmtMin=m=>`${Math.floor(Math.max(0,m)/60)}小时${pad(Math.max(0,m)%60)}分`;
+
+let state=loadState();
+function loadState(){
+  try{
+    const x=JSON.parse(localStorage.getItem(KEY));
+    if(x&&Array.isArray(x.employees)&&Array.isArray(x.sessions)) return x;
+  }catch(e){}
+  return {employees:[
+    
+    {id:2,name:"鈴木",active:true},
+    {id:3,name:"田中",active:true}
+  ],sessions:[],nextEmployeeId:4,nextSessionId:1,nextBreakId:1};
+}
+function save(){localStorage.setItem(KEY,JSON.stringify(state));}
+function activeEmployees(){return state.employees.filter(e=>e.active);}
+function currentEmployeeId(){return Number($("#employee").value);}
+function currentMonthEmployeeId(){return Number($("#monthEmployee").value);}
+function openSession(eid){return state.sessions.find(s=>s.employeeId===eid&&!s.clockOut)||null;}
+function workMinutes(s){
+  const end=s.clockOut||nowIso();
+  let m=minsBetween(s.clockIn,end);
+  for(const b of s.breaks){
+    m-=minsBetween(b.start,b.end||end);
+  }
+  return Math.max(0,m);
+}
+function breakMinutes(s){
+  const end=s.clockOut||nowIso();
+  return s.breaks.reduce((a,b)=>a+minsBetween(b.start,b.end||end),0);
+}
+function tick(){
+  const d=new Date();
+  $("#date").textContent=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+  $("#clock").textContent=`${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  if(openSession(currentEmployeeId())) renderToday();
+}
+setInterval(tick,1000); tick();
+
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active")); b.classList.add("active");
+  ["clockPane","monthPane","staffPane","backupPane"].forEach(id=>$("#"+id).classList.add("hidden"));
+  $("#"+b.dataset.tab).classList.remove("hidden");
+  if(b.dataset.tab==="monthPane") renderMonth();
+}));
+
+function renderSelects(){
+  for(const id of ["employee","monthEmployee"]){
+    const sel=$("#"+id), old=sel.value; sel.innerHTML="";
+    activeEmployees().forEach(e=>{const o=document.createElement("option");o.value=e.id;o.textContent=e.name;sel.appendChild(o)});
+    if([...sel.options].some(o=>o.value===old)) sel.value=old;
+  }
+}
+function renderStaff(){
+  const box=$("#employeeList"); box.innerHTML="";
+  state.employees.forEach(e=>{
+    const row=document.createElement("div");row.className="row top";
+    const left=document.createElement("span");left.innerHTML=`${escapeHtml(e.name)} <span class="small">${e.active?"在职":"停用"}</span>`;
+    const actions=document.createElement("div");actions.style.display="flex";actions.style.gap="8px";
+    const btn=document.createElement("button");btn.textContent=e.active?"停用":"恢复";
+    btn.addEventListener("click",()=>{e.active=!e.active;save();renderAll();});
+    const del=document.createElement("button");del.textContent="删除";
+    del.addEventListener("click",()=>{
+      const count=state.sessions.filter(s=>s.employeeId===e.id).length;
+      const msg=count
+        ? `确定删除「${e.name}」吗？\n该员工有 ${count} 条勤務记录，删除后这些打卡记录也会一并删除。此操作无法撤销。`
+        : `确定删除「${e.name}」吗？\n此操作无法撤销。`;
+      if(!confirm(msg)) return;
+      state.sessions=state.sessions.filter(s=>s.employeeId!==e.id);
+      state.employees=state.employees.filter(x=>x.id!==e.id);
+      save();renderAll();
+    });
+    actions.append(btn,del);row.append(left,actions);box.appendChild(row);
+  });
+}
+function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+
+function renderToday(){
+  const eid=currentEmployeeId(); if(!eid)return;
+  const today=localDateKey(new Date());
+  const rows=state.sessions.filter(s=>s.employeeId===eid&&localDateKey(new Date(s.clockIn))===today);
+  const box=$("#todayRows");box.innerHTML="";let total=0;
+  if(!rows.length) box.innerHTML='<div class="small" style="padding:14px 0">今天还没有记录</div>';
+  rows.forEach((s,i)=>{
+    total+=workMinutes(s);
+    const br=s.breaks.map(b=>`${timeOf(b.start)}-${timeOf(b.end)}`).join(" / ")||"—";
+    const row=document.createElement("div");row.className="row";
+    row.innerHTML=`<div class="top"><b>第 ${i+1} 段勤務</b><span>${fmtMin(workMinutes(s))}</span></div>
+    <div class="small" style="margin-top:6px">出勤 ${timeOf(s.clockIn)}　休息 ${br}　退勤 ${timeOf(s.clockOut)}</div>`;
+    box.appendChild(row);
+  });
+  $("#todayTotal").textContent=fmtMin(total);
+  const s=openSession(eid);
+  $("#status").textContent=s?(s.breaks.some(b=>!b.end)?"现在正在休息。":"现在正在工作中。"):"现在可以点击「出勤」。";
+}
+document.querySelectorAll("[data-action]").forEach(b=>b.addEventListener("click",()=>{
+  const eid=currentEmployeeId(); if(!eid)return;
+  const action=b.dataset.action; const s=openSession(eid);
+  if(action==="in"){
+    if(s){$("#status").textContent="已经在工作中，请先退勤。";return;}
+    state.sessions.push({id:state.nextSessionId++,employeeId:eid,clockIn:nowIso(),clockOut:null,breaks:[]});
+    $("#status").textContent="出勤打卡成功";
+  }else if(action==="out"){
+    if(!s){$("#status").textContent="当前没有出勤记录。";return;}
+    const ob=s.breaks.find(b=>!b.end); if(ob)ob.end=nowIso();
+    s.clockOut=nowIso();$("#status").textContent="退勤打卡成功";
+  }else if(action==="break_start"){
+    if(!s){$("#status").textContent="请先出勤。";return;}
+    if(s.breaks.some(b=>!b.end)){ $("#status").textContent="已经在休息中。";return;}
+    s.breaks.push({id:state.nextBreakId++,start:nowIso(),end:null});$("#status").textContent="休憩开始";
+  }else if(action==="break_end"){
+    if(!s){$("#status").textContent="当前没有出勤记录。";return;}
+    const ob=s.breaks.find(b=>!b.end); if(!ob){$("#status").textContent="没有进行中的休息。";return;}
+    ob.end=nowIso();$("#status").textContent="休憩结束";
+  }
+  save();renderAll();
+}));
+
+$("#employee").addEventListener("change",renderToday);
+$("#monthEmployee").addEventListener("change",renderMonth);
+$("#monthInput").value=localYM(new Date());
+$("#monthInput").addEventListener("change",renderMonth);
+
+function renderMonth(){
+  const eid=currentMonthEmployeeId(); if(!eid)return;
+  const ym=$("#monthInput").value||localYM(new Date());
+  const rows=state.sessions.filter(s=>s.employeeId===eid&&localYM(new Date(s.clockIn))===ym).sort((a,b)=>new Date(a.clockIn)-new Date(b.clockIn));
+  let tw=0,tb=0;const days=new Set();const body=$("#monthRows");body.innerHTML="";
+  if(!rows.length)body.innerHTML='<tr><td colspan="6" class="small">本月没有记录</td></tr>';
+  rows.forEach(s=>{
+    tw+=workMinutes(s);tb+=breakMinutes(s);days.add(localDateKey(new Date(s.clockIn)));
+    const br=s.breaks.map(b=>`${timeOf(b.start)}-${timeOf(b.end)}`).join(" / ")||"—";
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${localDateKey(new Date(s.clockIn))}</td><td>${timeOf(s.clockIn)}</td><td>${br}</td><td>${timeOf(s.clockOut)}</td><td>${fmtMin(workMinutes(s))}</td><td><button class="edit-time-btn" data-edit-session="${s.id}">修改时间</button></td>`;
+    body.appendChild(tr);
+  });
+  $("#days").textContent=days.size+"天";$("#totalWork").textContent=fmtMin(tw);$("#totalBreak").textContent=fmtMin(tb);$("#avgWork").textContent=fmtMin(days.size?Math.round(tw/days.size):0);
+}
+
+const toLocalInput=s=>{
+  if(!s)return "";
+  const d=new Date(s), z=n=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`;
+};
+const fromLocalInput=v=>v?new Date(v).toISOString():null;
+let editingSessionId=null;
+
+$("#monthRows").addEventListener("click",e=>{
+  const btn=e.target.closest("[data-edit-session]"); if(!btn)return;
+  const s=state.sessions.find(x=>x.id===Number(btn.dataset.editSession)); if(!s)return;
+  editingSessionId=s.id;
+  $("#editTimeInfo").textContent=localDateKey(new Date(s.clockIn));
+  $("#editClockIn").value=toLocalInput(s.clockIn);
+  $("#editClockOut").value=toLocalInput(s.clockOut);
+  const box=$("#editBreaks"); box.innerHTML="";
+  s.breaks.forEach((b,i)=>{
+    const wrap=document.createElement("div");
+    wrap.innerHTML=`<div class="edit-line"><label class="small">休憩${i+1} 开始</label><input type="datetime-local" class="field edit-break-start" data-break="${i}" value="${toLocalInput(b.start)}"></div>
+    <div class="edit-line"><label class="small">休憩${i+1} 结束</label><input type="datetime-local" class="field edit-break-end" data-break="${i}" value="${toLocalInput(b.end)}"></div>`;
+    box.appendChild(wrap);
+  });
+  $("#editTimeModal").classList.remove("hidden");
+});
+
+$("#cancelEditTime").addEventListener("click",()=>{
+  editingSessionId=null; $("#editTimeModal").classList.add("hidden");
+});
+
+$("#saveEditTime").addEventListener("click",()=>{
+  const s=state.sessions.find(x=>x.id===editingSessionId); if(!s)return;
+  const ci=$("#editClockIn").value, co=$("#editClockOut").value;
+  if(!ci)return alert("请输入出勤时间");
+  if(co && new Date(co)<new Date(ci))return alert("退勤时间不能早于出勤时间");
+  const newBreaks=s.breaks.map((b,i)=>{
+    const sv=document.querySelector(`.edit-break-start[data-break="${i}"]`)?.value||"";
+    const ev=document.querySelector(`.edit-break-end[data-break="${i}"]`)?.value||"";
+    if(ev && !sv)throw new Error("休憩开始时间不能为空");
+    if(sv && ev && new Date(ev)<new Date(sv))throw new Error("休憩结束时间不能早于开始时间");
+    return {...b,start:sv?fromLocalInput(sv):b.start,end:ev?fromLocalInput(ev):null};
+  });
+  s.clockIn=fromLocalInput(ci);
+  s.clockOut=co?fromLocalInput(co):null;
+  s.breaks=newBreaks;
+  save();
+  editingSessionId=null;
+  $("#editTimeModal").classList.add("hidden");
+  renderAll();
+});
+
+$("#addEmployee").addEventListener("click",()=>{
+  const name=$("#newName").value.trim();
+  if(!name)return alert("请输入员工姓名");
+  if(state.employees.some(e=>e.name===name))return alert("该员工已经存在");
+  state.employees.push({id:state.nextEmployeeId++,name,active:true});
+  $("#newName").value="";save();renderAll();
+});
+
+function download(name,text,type){
+  const blob=new Blob([text],{type});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+$("#exportCsv").addEventListener("click",()=>{
+  const eid=currentMonthEmployeeId(), emp=state.employees.find(e=>e.id===eid), ym=$("#monthInput").value||localYM(new Date());
+  const rows=state.sessions.filter(s=>s.employeeId===eid&&localYM(new Date(s.clockIn))===ym);
+  const lines=[["日期","员工","出勤","退勤","休息时间(分)","实际工时(分)"]];
+  rows.forEach(s=>lines.push([localDateKey(new Date(s.clockIn)),emp?.name||"",timeOf(s.clockIn),timeOf(s.clockOut),breakMinutes(s),workMinutes(s)]));
+  const csv="\uFEFF"+lines.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(",")).join("\r\n");
+  download(`勤怠_${emp?.name||""}_${ym}.csv`,csv,"text/csv;charset=utf-8");
+});
+$("#backupBtn").addEventListener("click",()=>download(`勤怠备份_${localDateKey(new Date())}.json`,JSON.stringify(state,null,2),"application/json"));
+$("#restoreBtn").addEventListener("click",async()=>{
+  const file=$("#restoreFile").files[0]; if(!file)return alert("请选择备份文件");
+  try{
+    const data=JSON.parse(await file.text());
+    if(!Array.isArray(data.employees)||!Array.isArray(data.sessions))throw new Error();
+    if(!confirm("恢复后会覆盖当前全部数据，继续吗？"))return;
+    state=data;save();renderAll();alert("恢复完成");
+  }catch(e){alert("备份文件格式不正确");}
+});
+
+function renderAll(){renderSelects();renderStaff();renderToday();renderMonth();}
+renderAll();
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(()=>{}));
+}
+</script>
+</body></html>
